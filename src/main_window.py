@@ -6,6 +6,7 @@ This module exposes `PixelMakerWindow` class only (no top-level execution).
 
 import os
 from PyQt5.QtWidgets import (
+    QApplication,
     QMainWindow,
     QWidget,
     QHBoxLayout,
@@ -21,7 +22,7 @@ from PyQt5.QtWidgets import (
     QScrollArea,
 )
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QPixmap, QImage
 from PIL import Image
 
 from src.palette_processor import parse_palette_line
@@ -32,6 +33,34 @@ from src.ui import (
     create_controls_group,
     create_image_display_group,
 )
+# import the processing algorithm
+from src.art_processor import generate_pixel_art
+
+
+# helper: convert PIL image to QPixmap (robust fallback)
+def pil_to_qpixmap(pil):
+    try:
+        img = pil.convert('RGBA') if hasattr(pil, 'convert') else pil
+    except Exception:
+        return QPixmap()
+    try:
+        from PIL.ImageQt import ImageQt as _ImageQt
+        qim = _ImageQt(img)
+        return QPixmap.fromImage(qim)
+    except Exception:
+        pass
+    try:
+        w, h = img.size
+        data = img.tobytes('raw', 'RGBA')
+        qimg = QImage(data, w, h, QImage.Format_RGBA8888)
+        return QPixmap.fromImage(qimg)
+    except Exception:
+        try:
+            data = img.convert('BGRA').tobytes('raw', 'BGRA')
+            qimg = QImage(data, w, h, QImage.Format_ARGB32)
+            return QPixmap.fromImage(qimg)
+        except Exception:
+            return QPixmap()
 
 
 class PixelMakerWindow(QMainWindow):
@@ -405,6 +434,17 @@ class PixelMakerWindow(QMainWindow):
         except Exception:
             pass
 
+    def _check_generate_ready(self):
+        """Verifica se temos tudo para habilitar o botão 'Gerar'."""
+        ready = bool(self.original_image and self.segmentation_maps and self.color_palettes)
+        if ready:
+            ready = any(s in self.segmentation_maps for s in self.color_palettes)
+        try:
+            self.btn_generate.setEnabled(ready)
+        except Exception:
+            pass
+        return ready
+
     def _process_palettes(self):
         # If palettes were provided via the bulk editor, use them.
         # Otherwise, open the bulk editor so the user can define palettes.
@@ -425,9 +465,60 @@ class PixelMakerWindow(QMainWindow):
         self.btn_generate.setEnabled(bool(self.original_image and self.segmentation_maps and self.color_palettes))
 
     def _generate_pixel_art(self):
-        # TODO: Implement generation using art_processor.generate_pixel_art
-        print("GERAR: algoritmo ainda não implementado.")
+        print("Iniciando geração de pixel art (UI)...")
+        if not self._check_generate_ready():
+            QMessageBox.critical(self, "Erro", "Não é possível gerar. Verifique se a imagem original, os mapas e as paletas estão carregados e processados.")
+            return
+
+        try:
+            self.lbl_img_pixel_art.setText("Processando... por favor, aguarde.")
+        except Exception:
+            pass
+
+        # Allow UI to update before heavy processing
+        try:
+            QApplication.processEvents()
+        except Exception:
+            pass
+
+        try:
+            self.generated_pixel_art = generate_pixel_art(
+                self.original_image,
+                self.segmentation_maps,
+                self.color_palettes,
+                self.spin_scale_factor.value(),
+            )
+
+            if not self.generated_pixel_art:
+                raise Exception("Algoritmo não retornou imagem.")
+
+            pixmap = pil_to_qpixmap(self.generated_pixel_art)
+            # Use nearest-neighbor (fast) transformation to avoid blurring the pixel art preview
+            self.lbl_img_pixel_art.setPixmap(
+                pixmap.scaled(self.lbl_img_pixel_art.size(), Qt.KeepAspectRatio, Qt.FastTransformation)
+            )
+            self.btn_save.setEnabled(True)
+
+        except Exception as e:
+            print(f"ERRO na geração: {e}")
+            self._clear_generated_art()
+            QMessageBox.critical(self, "Erro na Geração", f"Ocorreu um erro durante o processamento:\n\n{e}")
 
     def _save_pixel_art(self):
-        # TODO: Save generated_pixel_art to file
-        print("SALVAR: ainda não implementado.")
+        if not self.generated_pixel_art:
+            QMessageBox.warning(self, "Nada para Salvar", "Gere uma imagem de pixel art primeiro.")
+            return
+
+        file_filter = "Imagem PNG (*.png)"
+        file_path, _ = QFileDialog.getSaveFileName(self, "Salvar Pixel Art", "", file_filter)
+
+        if file_path:
+            try:
+                # Ensure extension
+                if not file_path.lower().endswith('.png'):
+                    file_path += '.png'
+                # Save PIL image
+                self.generated_pixel_art.save(file_path, 'PNG')
+                QMessageBox.information(self, "Sucesso", f"Imagem salva em:\n{file_path}")
+            except Exception as e:
+                QMessageBox.critical(self, "Erro ao Salvar", f"Não foi possível salvar o arquivo:\n{e}")
