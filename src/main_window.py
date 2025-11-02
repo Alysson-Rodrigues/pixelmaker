@@ -11,15 +11,9 @@ from PyQt5.QtWidgets import (
     QWidget,
     QHBoxLayout,
     QVBoxLayout,
-    QFormLayout,
-    QPushButton,
     QLabel,
-    QLineEdit,
-    QSpinBox,
-    QGroupBox,
     QFileDialog,
     QMessageBox,
-    QScrollArea,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap, QImage
@@ -33,11 +27,9 @@ from src.ui import (
     create_controls_group,
     create_image_display_group,
 )
-# import the processing algorithm
 from src.art_processor import generate_pixel_art
 
 
-# helper: convert PIL image to QPixmap (robust fallback)
 def pil_to_qpixmap(pil):
     try:
         img = pil.convert('RGBA') if hasattr(pil, 'convert') else pil
@@ -72,7 +64,6 @@ class PixelMakerWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        # Dados do processo
         self.original_image = None  # PIL.Image
         self.segmentation_maps = {}  # {subject_name: PIL.Image}
         self.palette_inputs = {}  # {subject_name: QLineEdit}
@@ -114,9 +105,7 @@ class PixelMakerWindow(QMainWindow):
 
     
 
-    # --- Helpers / slots ---
     def _clear_palette_widgets(self):
-        # Remove widgets added to palettes_layout except the final stretch
         while self.palettes_layout.count() > 0:
             item = self.palettes_layout.takeAt(0)
             widget = item.widget()
@@ -205,9 +194,6 @@ class PixelMakerWindow(QMainWindow):
         if not file_paths:
             return
 
-    # Não limpar mapas existentes: vamos adicionar incrementalmente
-    # A arte gerada será limpa mais abaixo se houver mudanças
-
         errors = []
         loaded = {}
         req_w, req_h = self.required_map_dims
@@ -232,31 +218,25 @@ class PixelMakerWindow(QMainWindow):
                                 "Alguns mapas não puderam ser carregados:\n\n" + "\n".join(errors))
 
         if not loaded:
-            # nada novo carregado
             if not self.segmentation_maps:
                 self.lbl_maps_loaded.setText("Nenhum mapa carregado.")
             return
 
-        # Adiciona os novos mapas ao dicionário existente
         self.segmentation_maps.update(loaded)
         self.lbl_maps_loaded.setText(f"{len(self.segmentation_maps)} mapas carregados.")
         self.btn_clear.setEnabled(True)
         self.btn_process_palettes.setEnabled(True)
         self._update_palette_widgets()
-        # Limpa arte gerada pois a seleção mudou
         self._clear_generated_art()
 
     def _update_palette_widgets(self):
-        # Clear existing small palette widgets; we now use a single bulk editor dialog
         self._clear_palette_widgets()
 
-        # Show a short instruction in the palettes area
         try:
             instr = QLabel("Use 'Editar Paletas' para definir/editar as paletas dos mapas carregados.")
             self.palettes_layout.insertWidget(self.palettes_layout.count() - 1, instr)
         except Exception:
             pass
-        # Atualiza a lista de mapas (se o widget existir)
         try:
             self.lst_maps.clear()
             for subject_name in sorted(self.segmentation_maps.keys()):
@@ -278,7 +258,6 @@ class PixelMakerWindow(QMainWindow):
             return
 
         img = self.segmentation_maps.get(subject_name)
-        # Preenche texto inicial a partir da paleta já processada ou do QLineEdit existente
         initial = ""
         if subject_name in self.color_palettes:
             initial = ", ".join(self.color_palettes[subject_name])
@@ -297,7 +276,6 @@ class PixelMakerWindow(QMainWindow):
 
         Raises Exception on invalid palette format.
         """
-        # validate/parse using existing parser
         try:
             colors = parse_palette_line(text)
         except Exception as e:
@@ -306,13 +284,11 @@ class PixelMakerWindow(QMainWindow):
         if not colors:
             raise Exception("A paleta está vazia ou em formato inválido.")
 
-        # Update stored palettes and the visible QLineEdit if exists
         self.color_palettes[subject_name] = colors
         le = self.palette_inputs.get(subject_name)
         if le:
             le.setText(", ".join(colors))
 
-        # enable generate button if all conditions met
         try:
             self.btn_generate.setEnabled(bool(self.original_image and self.segmentation_maps and self.color_palettes))
         except Exception:
@@ -320,7 +296,6 @@ class PixelMakerWindow(QMainWindow):
 
     def _open_palette_bulk_editor(self):
         """Abre o editor em massa para todas as paletas dos mapas carregados."""
-        # Prepare initial texts from either processed palettes or current QLineEdits
         initial = {}
         for subject in sorted(self.segmentation_maps.keys()):
             if subject in self.color_palettes:
@@ -352,24 +327,20 @@ class PixelMakerWindow(QMainWindow):
                 errors.append(f"{subject}: {e}")
 
         if errors:
-            # raise a single exception with details
             raise Exception("\n".join(errors))
 
-        # Apply parsed palettes
         for subject, colors in parsed.items():
             self.color_palettes[subject] = colors
             le = self.palette_inputs.get(subject)
             if le:
                 le.setText(", ".join(colors))
 
-        # update generate button status
         try:
             self.btn_generate.setEnabled(bool(self.original_image and self.segmentation_maps and self.color_palettes))
         except Exception:
             pass
 
     def _on_scale_changed(self, value):
-        # Try to compute original dims; fall back to label parsing
         if not self.original_image:
             import re
             txt = self.lbl_original_dims.text() if hasattr(self, 'lbl_original_dims') else ''
@@ -419,16 +390,13 @@ class PixelMakerWindow(QMainWindow):
             name = item.text()
             if name in self.segmentation_maps:
                 self.segmentation_maps.pop(name, None)
-                # também remover entradas relacionadas
                 self.palette_inputs.pop(name, None)
                 self.color_palettes.pop(name, None)
                 removed.append(name)
 
-        # Atualiza widgets e labels
         self._update_palette_widgets()
         self._clear_generated_art()
         self.lbl_maps_loaded.setText(f"{len(self.segmentation_maps)} mapas carregados." if self.segmentation_maps else "Nenhum mapa carregado.")
-        # Desabilitar botão de remover se não houver mapas
         try:
             self.btn_remove_maps.setEnabled(len(self.segmentation_maps) > 0)
         except Exception:
@@ -446,21 +414,16 @@ class PixelMakerWindow(QMainWindow):
         return ready
 
     def _process_palettes(self):
-        # If palettes were provided via the bulk editor, use them.
-        # Otherwise, open the bulk editor so the user can define palettes.
         print("Processando paletas...")
         if not self.color_palettes:
-            # open bulk editor to let user define palettes
             QMessageBox.information(self, "Definir Paletas", "Nenhuma paleta encontrada. Abra o editor para definir as paletas.")
             self._open_palette_bulk_editor()
 
-        # After editor returns, check again
         if not self.color_palettes:
             QMessageBox.information(self, "Paletas Vazias", "Nenhuma paleta foi definida.")
             self.btn_generate.setEnabled(False)
             return
 
-        # At this point color_palettes should contain parsed palettes
         QMessageBox.information(self, "Sucesso", f"Paletas prontas para {len(self.color_palettes)} assuntos.")
         self.btn_generate.setEnabled(bool(self.original_image and self.segmentation_maps and self.color_palettes))
 
@@ -475,7 +438,6 @@ class PixelMakerWindow(QMainWindow):
         except Exception:
             pass
 
-        # Allow UI to update before heavy processing
         try:
             QApplication.processEvents()
         except Exception:
@@ -493,7 +455,6 @@ class PixelMakerWindow(QMainWindow):
                 raise Exception("Algoritmo não retornou imagem.")
 
             pixmap = pil_to_qpixmap(self.generated_pixel_art)
-            # Use nearest-neighbor (fast) transformation to avoid blurring the pixel art preview
             self.lbl_img_pixel_art.setPixmap(
                 pixmap.scaled(self.lbl_img_pixel_art.size(), Qt.KeepAspectRatio, Qt.FastTransformation)
             )

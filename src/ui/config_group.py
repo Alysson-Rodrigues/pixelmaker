@@ -20,18 +20,14 @@ def create_config_group(window):
     layout.addWidget(window.lbl_required_map_dims)
     layout.addSpacing(10)
 
-    # Adicionar mapas incrementalmente
     window.btn_add_maps = QPushButton("Adicionar Mapas de Segmentação")
     window.btn_add_maps.clicked.connect(window._load_segmentation_maps)
     window.btn_add_maps.setEnabled(False)
 
-    # Lista de mapas carregados (nomes dos assuntos)
     window.lst_maps = QListWidget()
     window.lst_maps.setSelectionMode(QListWidget.MultiSelection)
-    # Abrir editor de paleta ao dar duplo-clique no item
     window.lst_maps.itemDoubleClicked.connect(window._open_palette_editor)
 
-    # Botão para remover os mapas selecionados na lista
     window.btn_remove_maps = QPushButton("Remover Selecionados")
     window.btn_remove_maps.clicked.connect(window._remove_selected_maps)
     window.btn_remove_maps.setEnabled(False)

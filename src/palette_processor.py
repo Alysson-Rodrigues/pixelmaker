@@ -5,7 +5,6 @@ Moved into `src` for better packaging.
 
 import re
 
-# Regex simple para encontrar códigos hex (#RRGGBB)
 HEX_REGEX = re.compile(r'#[0-9a-fA-F]{6}\b')
 
 
@@ -21,7 +20,6 @@ def parse_palette_line(text_line):
     if not text_line:
         return []
 
-    # Encontra todos os códigos hex na linha
     colors = HEX_REGEX.findall(text_line)
 
     return colors

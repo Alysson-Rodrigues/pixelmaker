@@ -21,8 +21,6 @@ if not hasattr(np, 'asscalar'):
     np.asscalar = _asscalar
 
 
-# --- Funções Auxiliares de Cor ---
-
 def hex_to_rgb(hex_str):
     """Converte uma string hex #RRGGBB para uma tupla (R, G, B)."""
     hex_str = hex_str.lstrip('#')
@@ -31,9 +29,7 @@ def hex_to_rgb(hex_str):
 
 def rgb_to_lab(rgb_tuple):
     """Converte uma tupla (R, G, B) (0-255) ou floats para um objeto LabColor."""
-    # colormath espera valores 0-1.0 para sRGBColor
     r, g, b = rgb_tuple
-    # Normalize if values are in 0-255 range
     try:
         rn = float(r) / 255.0
         gn = float(g) / 255.0
@@ -49,8 +45,6 @@ def get_color_diff(lab1, lab2):
     return delta_e_cie2000(lab1, lab2)
 
 
-# --- O Processador Principal ---
-
 def generate_pixel_art(original_image, segmentation_maps, palettes, block_size):
     """Gera a imagem de pixel art com base nos dados fornecidos.
 
@@ -64,7 +58,6 @@ def generate_pixel_art(original_image, segmentation_maps, palettes, block_size):
         PIL.Image: A imagem de pixel art gerada.
     """
     print(f"Iniciando geração: block_size={block_size}")
-    # 1. Pré-processar as paletas (converter para Lab)
     lab_palettes = {}
     for subject, hex_colors in palettes.items():
         if not hex_colors:
@@ -77,7 +70,6 @@ def generate_pixel_art(original_image, segmentation_maps, palettes, block_size):
     if not lab_palettes:
         raise ValueError("Nenhuma paleta válida foi processada. Abortando.")
 
-    # Construir paleta combinada (todas as cores de todas as paletas) para fallback
     combined_lab_list = []
     combined_hex_list = []
     for subject, hex_colors in palettes.items():
@@ -94,7 +86,6 @@ def generate_pixel_art(original_image, segmentation_maps, palettes, block_size):
     if not combined_lab_list:
         raise ValueError("Nenhuma cor disponível nas paletas para fallback.")
 
-    # 2. Preparar arrays de imagem para acesso rápido
     original_array = np.array(original_image.convert('RGBA'))
     orig_h, orig_w, _ = original_array.shape
 
@@ -103,10 +94,8 @@ def generate_pixel_art(original_image, segmentation_maps, palettes, block_size):
         map_w, map_h = img.size
         if map_w != (orig_w // block_size) or map_h != (orig_h // block_size):
             raise ValueError(f"Mapa '{subject}' tem dimensões erradas ({map_w}x{map_h}). Esperado ({orig_w // block_size}x{orig_h // block_size})")
-        # usamos canal alpha para detectar presença
         seg_arrays[subject] = np.array(img.convert('RGBA'))[:, :, 3]
 
-    # 3. Criar imagem de saída (cada pixel representa um bloco)
     out_w = orig_w // block_size
     out_h = orig_h // block_size
     output_image = Image.new('RGBA', (out_w, out_h))
@@ -114,33 +103,38 @@ def generate_pixel_art(original_image, segmentation_maps, palettes, block_size):
 
     print(f"Dimensões de saída: {out_w} x {out_h}")
 
-    # 4. Loop principal
     for y in range(out_h):
         for x in range(out_w):
-            # identificar assunto pelo mapa (checar alpha)
             current_subject = None
             for subject, alpha_arr in seg_arrays.items():
                 if alpha_arr[y, x] > 128:
                     current_subject = subject
                     break
 
-            # se nenhum subject encontrado, usaremos a paleta combinada (fallback)
             use_combined = False
             if current_subject is None or current_subject not in lab_palettes:
                 use_combined = True
 
-            # calcular média do bloco na imagem original
             y_start, x_start = y * block_size, x * block_size
             y_end, x_end = y_start + block_size, x_start + block_size
             block_array = original_array[y_start:y_end, x_start:x_end]
 
-            avg_r = np.mean(block_array[:, :, 0])
-            avg_g = np.mean(block_array[:, :, 1])
-            avg_b = np.mean(block_array[:, :, 2])
+            try:
+                block_image = Image.fromarray(block_array, 'RGBA').convert('RGB')
+            except Exception as e:
+                print(f"Aviso: Falha ao criar imagem do bloco (x={x}, y={y}): {e}")
+                output_pixels[x, y] = (0, 0, 0, 0)
+                continue
 
-            avg_lab_color = rgb_to_lab((avg_r, avg_g, avg_b))
+            quantized_block = block_image.quantize(colors=1)
+            palette = quantized_block.getpalette()
+            if not palette:
+                output_pixels[x, y] = (0, 0, 0, 0)
+                continue
 
-            # procurar cor mais próxima na paleta do assunto (ou fallback)
+            dominant_rgb_tuple = tuple(palette[0:3])
+            target_lab_color = rgb_to_lab(dominant_rgb_tuple)
+
             if use_combined:
                 target_palette_lab = combined_lab_list
                 original_palette_hex = combined_hex_list
@@ -151,7 +145,7 @@ def generate_pixel_art(original_image, segmentation_maps, palettes, block_size):
             min_diff = float('inf')
             best_color_hex = "#000000"
             for i, pal_lab in enumerate(target_palette_lab):
-                diff = get_color_diff(avg_lab_color, pal_lab)
+                diff = get_color_diff(target_lab_color, pal_lab)
                 if diff < min_diff:
                     min_diff = diff
                     best_color_hex = original_palette_hex[i]
@@ -159,7 +153,6 @@ def generate_pixel_art(original_image, segmentation_maps, palettes, block_size):
             best_rgb_tuple = hex_to_rgb(best_color_hex)
             output_pixels[x, y] = (int(best_rgb_tuple[0]), int(best_rgb_tuple[1]), int(best_rgb_tuple[2]), 255)
 
-        # progresso
         if out_h > 0 and y % max(1, (out_h // 10)) == 0:
             print(f"Progresso: {int((y / out_h) * 100)}%")
 

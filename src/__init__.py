@@ -1,4 +1,3 @@
-# src package for PixelMaker
 __all__ = [
     'main_window',
     'stylesheet',

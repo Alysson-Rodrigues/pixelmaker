@@ -43,13 +43,10 @@ class PaletteEditorDialog(QDialog):
 
         layout = QVBoxLayout()
 
-        # Preview (scaled)
-        self.lbl_preview = QLabel()
         self.lbl_preview.setAlignment(Qt.AlignCenter)
         self.lbl_preview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         if pil_image is not None:
             try:
-                # ensure RGBA to avoid ImageQt mode issues
                 if hasattr(pil_image, 'convert'):
                     img = pil_image.convert('RGBA')
                 else:
@@ -62,7 +59,6 @@ class PaletteEditorDialog(QDialog):
                 # fallback: no pixmap
                 pass
 
-        # Scroll area for preview in case of large content
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         content = QWidget()
@@ -72,14 +68,12 @@ class PaletteEditorDialog(QDialog):
 
         layout.addWidget(scroll)
 
-        # Input for palette
         self.input_palette = QLineEdit()
         self.input_palette.setPlaceholderText("Ex: #FFDAB9, #E0B088, #C18866")
         self.input_palette.setText(initial_text)
         layout.addWidget(QLabel("Paleta (separar por vírgula):"))
         layout.addWidget(self.input_palette)
 
-        # Buttons
         btn_layout = QHBoxLayout()
         self.btn_save = QPushButton("Salvar")
         self.btn_cancel = QPushButton("Cancelar")
@@ -95,7 +89,6 @@ class PaletteEditorDialog(QDialog):
 
     def _on_save(self):
         text = self.input_palette.text().strip()
-        # let the parent handle validation/parse
         try:
             self.parent._save_palette_for_subject(self.subject_name, text)
             self.accept()
