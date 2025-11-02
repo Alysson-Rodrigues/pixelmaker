@@ -3,8 +3,8 @@
 import sys
 from PyQt5.QtWidgets import QApplication
 
-from main_window import PixelMakerWindow
-from stylesheet import dark_stylesheet
+from src.main_window import PixelMakerWindow
+from src.stylesheet import dark_stylesheet
 
 
 def main():

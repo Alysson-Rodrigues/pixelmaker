@@ -1,1 +1,13 @@
-__pycache__/
+**/pycache/
+**/*.pyc
+**/.cache/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/pip-wheel-metadata/
+**/venv/
+**/.venv/
+**/env/
+**/node_modules/
+**/build/
+**/dist/

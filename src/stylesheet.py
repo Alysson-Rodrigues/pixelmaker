@@ -1,7 +1,4 @@
-"""stylesheet.py
-
-Define the dark QSS stylesheet used by the application.
-"""
+"""Dark QSS stylesheet for PixelMaker (moved into src package)."""
 
 dark_stylesheet = """
     QWidget {
